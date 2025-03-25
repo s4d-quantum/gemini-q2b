@@ -61,8 +61,8 @@ const SalesOrderDetail: React.FC = () => {
   const [deviceType, setDeviceType] = useState<'cellular' | 'serial'>('cellular');
 
   const isFromGoodsOut = location.pathname.startsWith('/goods-out');
-  const isProcessingOrConfirmed = order?.status === 'processing' || order?.status === 'confirmed';
-  const readOnlyMode = isFromGoodsOut || isProcessingOrConfirmed;
+  const isDraftOrPending = order?.status === 'draft' || order?.status === 'pending';
+  const readOnlyMode = !isFromGoodsOut && isDraftOrPending;
 
   useEffect(() => {
     if (id) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface BookDeviceShipmentProps {
@@ -18,54 +18,60 @@ const BookDeviceShipment: React.FC<BookDeviceShipmentProps> = ({
   devices,
   onDeviceConfirmation,
 }) => {
-  const [imeiInput, setImeiInput] = useState('');
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [imeiSerial, setImeiSerial] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setImeiInput('');
-      setValidationMessage(null);
+      setImeiSerial('');
+      setError(null);
+      setSuccess(null);
+      // Focus on the input when the modal opens
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
   }, [isOpen]);
 
-  const handleImeiInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setImeiInput(e.target.value);
-  };
-
-  const handleImeiSubmit = () => {
+  const handleConfirm = async () => {
     setLoading(true);
-    setValidationMessage(null);
+    setError(null);
+    setSuccess(null);
 
-    const trimmedInput = imeiInput.trim();
+    try {
+      const device = devices.find(
+        (device) => device.identifier === imeiSerial
+      );
 
-    if (!trimmedInput) {
-      setValidationMessage('Please enter an IMEI/Serial number.');
+      if (!device) {
+        setError('Device not found in this sales order.');
+        return;
+      }
+
+      onDeviceConfirmation(device.id, true);
+      setSuccess(`Device ${imeiSerial} confirmed.`);
+      setImeiSerial(''); // Clear the input after successful confirmation
+      
+      // Refocus on the input after successful confirmation
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    } catch (err) {
+      console.error('Error confirming device:', err);
+      setError('Failed to confirm device.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const foundDevice = devices.find(
-      (device) => device.identifier === trimmedInput
-    );
-
-    if (foundDevice) {
-      onDeviceConfirmation(foundDevice.id, true);
-      setValidationMessage(
-        `IMEI/Serial ${trimmedInput} confirmed for device ${foundDevice.manufacturer} ${foundDevice.model}.`
-      );
-    } else {
-      setValidationMessage(
-        `IMEI/Serial ${trimmedInput} not found in the sales order.`
-      );
-    }
-
-    setLoading(false);
   };
 
-  const handleSubmit = () => {
-    onShipmentBooked();
-    onClose();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      handleConfirm();
+    }
   };
 
   if (!isOpen) return null;
@@ -74,48 +80,46 @@ const BookDeviceShipment: React.FC<BookDeviceShipmentProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Book Devices</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <h2 className="text-xl font-semibold">Confirm IMEI/Serial</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {validationMessage && (
-          <div
-            className={`mb-4 p-3 rounded-md flex items-center ${
-              validationMessage.includes('not found')
-                ? 'bg-red-100 text-red-700'
-                : 'bg-green-100 text-green-700'
-            }`}
-          >
-            {validationMessage.includes('not found') ? (
-              <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
-            ) : (
-              <CheckCircle2 className="h-5 w-5 mr-2 flex-shrink-0" />
-            )}
-            {validationMessage}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
+            {error}
           </div>
         )}
 
-        <div className="mb-4">
-          <label htmlFor="imeiInput" className="block text-sm font-medium text-gray-700">
-            Enter IMEI/Serial Number
-          </label>
-          <div className="mt-1 relative rounded-md shadow-sm">
-            <input
-              type="text"
-              id="imeiInput"
-              className="block w-full pr-10 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="Scan or enter IMEI/Serial"
-              value={imeiInput}
-              onChange={handleImeiInputChange}
-            />
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              {loading ? (
-                <Loader2 className="animate-spin text-gray-500" />
-              ) : null}
-            </div>
+        {success && (
+          <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md flex items-center">
+            <CheckCircle2 className="h-5 w-5 mr-2 flex-shrink-0" />
+            {success}
           </div>
+        )}
+
+        <div className="mb-6">
+          <label
+            htmlFor="imeiSerial"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
+            Enter IMEI/Serial:
+          </label>
+          <input
+            type="text"
+            id="imeiSerial"
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            value={imeiSerial}
+            onChange={(e) => setImeiSerial(e.target.value)}
+            onKeyDown={handleKeyDown} // Listen for Enter key
+            ref={inputRef} // Attach the ref to the input
+            disabled={loading}
+          />
         </div>
 
         <div className="flex justify-end space-x-3">
@@ -127,17 +131,18 @@ const BookDeviceShipment: React.FC<BookDeviceShipmentProps> = ({
             Cancel
           </button>
           <button
-            onClick={handleImeiSubmit}
+            onClick={handleConfirm}
             disabled={loading}
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            Confirm IMEI/Serial
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-          >
-            Submit
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Confirming...
+              </>
+            ) : (
+              'Confirm IMEI/Serial'
+            )}
           </button>
         </div>
       </div>
